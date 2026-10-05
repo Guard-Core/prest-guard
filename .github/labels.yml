@@ -1,0 +1,67 @@
+- name: "area: middleware"
+  color: "0E8A16"
+  description: "Touches the plugin middleware core"
+
+- name: config
+  color: "FBCA04"
+  description: "PREST_GUARD_* configuration surface"
+
+- name: tests
+  color: "F9D0C4"
+  description: "Test suite changes"
+
+- name: benchmarks
+  color: "D4C5F9"
+  description: "Cost or throughput benchmarks"
+
+- name: documentation
+  color: "0075CA"
+  description: "Docs, README, governance files"
+
+- name: ci
+  color: "5319E7"
+  description: "GitHub Actions workflows"
+
+- name: build
+  color: "BFD4F2"
+  description: "Makefile / module files / plugin packaging"
+
+- name: dependencies
+  color: "0366D6"
+  description: "go.mod or go.sum changes"
+
+- name: no-issue
+  color: "C5DEF5"
+  description: "Chore or docs change that delivers no tracked issue"
+
+- name: bug
+  color: "D73A4A"
+  description: "Confirmed defect"
+
+- name: enhancement
+  color: "A2EEEF"
+  description: "Improvement to an existing feature"
+
+- name: security
+  color: "B60205"
+  description: "Security-related issue (use private reporting first!)"
+
+- name: pinned
+  color: "EE9900"
+  description: "Keep open regardless of staleness"
+
+- name: work-in-progress
+  color: "5D7DE8"
+  description: "Author is still working on it; exempt from staleness"
+
+- name: blocked
+  color: "8A6D5C"
+  description: "Waiting on something external; exempt from staleness"
+
+- name: no-pr-activity
+  color: "CCCCCC"
+  description: "Automatically applied by the stale bot"
+
+- name: no-issue-activity
+  color: "CCCCCC"
+  description: "Automatically applied by the stale bot"
