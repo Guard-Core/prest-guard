@@ -1,36 +1,65 @@
-name: ci
+name: CI
 
 on:
   push:
     branches: [master]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.26'
-      - run: test -z "$(gofmt -l . )" || (gofmt -l . && exit 1)
-      - run: go vet ./...
-
   test:
+    name: Test (go ${{ matrix.go }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ['1.26.x']
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          go-version: '1.26'
-      - run: go test -race ./...
+          persist-credentials: false
 
-  plugin-build:
-    # The artifact that matters: the plugin must compile with -buildmode=plugin.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.26'
-      - run: go build -buildmode=plugin -trimpath -ldflags "-s -w" -o lib/middlewares/guard.so .
+          go-version: ${{ matrix.go }}
+
+      - name: gofmt check
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "Unformatted files:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test (unit, race)
+        run: go test -race ./...
+
+      - name: plugin artifact build
+        run: |
+          CGO_ENABLED=1 go build -buildmode=plugin -trimpath -ldflags "-s -w" \
+            -o lib/middlewares/guard.so .
+
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: 'stable'
+
+      - name: Run govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...

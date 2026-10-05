@@ -1,0 +1,42 @@
+name: Greetings
+
+on: [pull_request_target, issues]
+
+permissions: {}
+
+jobs:
+  greeting:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+    - uses: actions/first-interaction@1c4688942c71f71d4f5502a26ea67c331730fa4d # v3.1.0
+      with:
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        issue_message: |
+            Thanks for opening your first issue on **prest-guard**!
+
+            To help us triage quickly, please make sure your report includes:
+            - A clear reproduction (the pREST config, a curl snippet, or a failing test is ideal)
+            - Output of `go version`, the pREST version, and the plugin build you run
+            - The `PREST_GUARD_*` variables in play (redact secrets)
+            - Redis configuration if relevant (shared rate limits and bans)
+
+            A few pointers:
+            - Scan [README.md](../blob/main/README.md) for configuration and the plugin build, and the [guard-core-go docs](https://github.com/rennf93/guard-core-go) for engine behavior.
+            - **Security vulnerability?** Do **not** open a public issue - please use GitHub's private vulnerability reporting.
+
+            Thanks again - a maintainer will be with you soon.
+        pr_message: |
+            Thanks for opening your first pull request on **prest-guard**!
+
+            Quick checklist before review (most of these are enforced by CI, but worth a glance):
+            - [ ] The PR body says `Closes #N` for an open issue (the `issue-link` check enforces it); chores take the `no-issue` label
+            - [ ] `gofmt -l .` reports no files
+            - [ ] `go vet ./...` is clean
+            - [ ] `go test -race ./...` passes
+            - [ ] The plugin artifact builds: `make so` (`-buildmode=plugin` with CGO)
+            - [ ] If you touched configuration, updated the README table and the suite files
+
+            Welcome aboard - a maintainer will review shortly.

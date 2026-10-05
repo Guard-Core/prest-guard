@@ -1,0 +1,53 @@
+"area: middleware":
+  - changed-files:
+      - any-glob-to-any-file:
+          - middleware.go
+          - proxy.go
+          - exclusions.go
+          - log.go
+          - errors.go
+          - main.go
+
+config:
+  - changed-files:
+      - any-glob-to-any-file:
+          - config.go
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**/*_test.go'
+          - '**/*_test.go.bench'
+
+benchmarks:
+  - changed-files:
+      - any-glob-to-any-file:
+          - benchmark_test.go
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - README.md
+          - CHANGELOG.md
+          - AGENTS.md
+          - CONTRIBUTING.md
+          - SECURITY.md
+          - LICENSE
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - .github/**
+
+build:
+  - changed-files:
+      - any-glob-to-any-file:
+          - Makefile
+          - go.mod
+          - go.sum
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file:
+          - go.mod
+          - go.sum
