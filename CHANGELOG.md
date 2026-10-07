@@ -3,10 +3,11 @@
 All notable changes to this project are documented here. The format follows
 Keep a Changelog; versions follow SemVer.
 
-## [1.0.0] - 2026-10-07
+v1.0.0 (2026-10-07)
+-------------------
 
-The first tagged release: the family Actions ruleset, the parity CI, and the
-guard-core-go v4.3.1 floor.
+The first tagged release: the family Actions ruleset, the parity CI, and the guard-core-go v4.3.1 floor
+-------------------------------------------------------------------------------------------------------
 
 ### Added
 
