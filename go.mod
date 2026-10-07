@@ -3,7 +3,7 @@ module github.com/rennf93/prest-guard
 go 1.26.0
 
 require (
-	github.com/rennf93/guard-core-go/v4 v4.3.0
+	github.com/rennf93/guard-core-go/v4 v4.3.1
 	github.com/rennf93/nethttp-guard v1.3.0
 	github.com/urfave/negroni/v3 v3.1.1
 )
