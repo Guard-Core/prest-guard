@@ -1,0 +1,10 @@
+site_name: prest-guard
+site_description: pREST middleware plugin: opt-in API security middleware for pREST (PostgreSQL REST), powered by the guard-core Go engine
+repo_name: Guard-Core/prest-guard
+repo_url: https://github.com/Guard-Core/prest-guard
+
+theme:
+  name: material
+
+nav:
+  - Home: index.md
