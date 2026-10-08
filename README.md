@@ -1,7 +1,7 @@
 # prest-guard
 
 A [pREST](https://github.com/prest/prest) middleware plugin that puts the
-[guard-core](https://github.com/rennf93/guard-core-go) engine in front of
+[guard-core](https://github.com/Guard-Core/guard-core-go) engine in front of
 pREST's CRUD routes: per-client rate limits, IP policy (blacklist, whitelist,
 exemptions), optional payload inspection across 19 attack categories, and
 opt-in auto-banning. Everything is off by default; with no environment

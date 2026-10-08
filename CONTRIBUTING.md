@@ -7,7 +7,7 @@ Small repo, few rules:
   (`make so`).
 - One topic per PR. If a fix belongs in the engine (detection behavior,
   check semantics), file it against
-  [guard-core-go](https://github.com/rennf93/guard-core-go) instead; this
+  [guard-core-go](https://github.com/Guard-Core/guard-core-go) instead; this
   repo maps and wires, it does not detect.
 - New configuration surface needs: raw-string validation in
   `ParseGuardConfig`, a mapping in `buildEngineConfig`, a default in the
