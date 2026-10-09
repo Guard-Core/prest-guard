@@ -1,15 +1,43 @@
-# prest-guard
+<p align="center">
+    <a href="https://guard-core.github.io/guard-core/latest/">
+        <img src="https://guard-core.github.io/guard-core/latest/assets/guard_core_legend.svg" alt="Guard Core">
+    </a>
+</p>
 
-A [pREST](https://github.com/prest/prest) middleware plugin that puts the
-[guard-core](https://github.com/Guard-Core/guard-core-go) engine in front of
-pREST's CRUD routes: per-client rate limits, IP policy (blacklist, whitelist,
-exemptions), optional payload inspection across 19 attack categories, and
-opt-in auto-banning. Everything is off by default; with no environment
-variables set, pREST behaves exactly as before.
+___
 
-It ships as a pREST middleware plugin (see prest#1039) rather than a core
-dependency, so none of its code or dependencies (regex engine, go-redis,
-cloud-range data) enter the default prestd binary.
+<p align="center">
+    <strong>A [pREST](https://github.com/prest/prest) middleware plugin that puts the [guard-core](https://github.com/Guard-Core/guard-core-go) engine in front of pREST's CRUD routes: per-client rate limits, IP policy (blacklist, whitelist, exemptions), optional payload inspection across 19 attack categories, and opt-in auto-banning.</strong>
+</p>
+
+<p align="center">
+    <a href="https://github.com/Guard-Core/prest-guard/releases">
+        <img src="https://img.shields.io/github/v/tag/Guard-Core/prest-guard?label=release&color=0080ff" alt="Release tag">
+    </a>
+    <a href="https://opensource.org/licenses/MIT">
+        <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License">
+    </a>
+    <a href="https://github.com/Guard-Core/prest-guard/actions/workflows/ci.yml">
+        <img src="https://github.com/Guard-Core/prest-guard/actions/workflows/ci.yml/badge.svg" alt="CI">
+    </a>
+    <a href="https://github.com/Guard-Core/prest-guard/actions/workflows/code-ql.yml">
+        <img src="https://github.com/Guard-Core/prest-guard/actions/workflows/code-ql.yml/badge.svg" alt="CodeQL">
+    </a>
+</p>
+
+<p align="center">
+    <img src="https://img.shields.io/badge/Go-00ADD8.svg?style=flat&logo=go&logoColor=white" alt="Go"> <img src="https://img.shields.io/badge/PostgreSQL-4169E1.svg?style=flat&logo=postgresql&logoColor=white" alt="PostgreSQL">
+</p>
+
+<p align="center">
+    <a href="https://guard-core.com">Website</a> &middot;
+    <a href="https://playground.guard-core.com">Playground</a> &middot;
+    <a href="https://app.guard-core.com">Dashboard</a> &middot;
+    <a href="https://discord.gg/ZW7ZJbjMkK">Discord</a>
+</p>
+
+---
+
 
 ## Requirements and the native-plugin catch
 
