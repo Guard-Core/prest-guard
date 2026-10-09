@@ -1,0 +1,53 @@
+services:
+  prest-guard-example:
+    build:
+      context: ../..
+      dockerfile: examples/docker-stack/Dockerfile
+    image: prest-guard-example:local
+    ports:
+      - "${SMOKE_PORT:-8080}:8080"
+    environment:
+      - PREST_GUARD_ENABLED=true
+      - PREST_GUARD_RATE_LIMIT=100
+      - PREST_GUARD_INSPECT_PAYLOADS=true
+      - PREST_GUARD_AUTO_BAN=false
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # Any HTTP answer (even a 404) proves prestd is serving; curl only
+      # fails when the server is not up.
+      test: ["CMD", "curl", "-s", "-o", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: prest
+      POSTGRES_PASSWORD: prest
+      POSTGRES_DB: prest
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prest"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 192M
+
+volumes:
+  pgdata:

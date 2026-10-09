@@ -1,0 +1,12 @@
+# The plugin registration the demo image ships: the loader dlopens
+# lib/middlewares/guard.so and looks up GuardMiddlewareLoad.
+[[pluginmiddlewarelist]]
+file = "guard"
+func = "Guard"
+
+[pg]
+host = "postgres"
+port = 5432
+database = "prest"
+user = "prest"
+password = "prest"
