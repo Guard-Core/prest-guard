@@ -129,7 +129,7 @@ ___
 
 ## Documentation
 
-📚 **[Documentation](https://guard-core.github.io/prest-guard/latest/)** - full technical documentation for this package.
+📚 **[Documentation](https://guard-core.github.io/prest-guard/)** - full technical documentation for this package.
 
 🛡️ **[Guard Core](https://guard-core.github.io/guard-core/latest/)** - the engine's reference documentation.
 
