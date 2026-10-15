@@ -34,6 +34,22 @@ func serve(tb testing.TB, h negroni.Handler, method, target, clientIP string, bo
 	return rec
 }
 
+// serveRaw is serve with request headers.
+func serveRaw(tb testing.TB, h negroni.Handler, target, clientIP string, headers map[string]string) *httptest.ResponseRecorder {
+	tb.Helper()
+	req := httptest.NewRequest(http.MethodGet, target, nil)
+	req.RemoteAddr = clientIP + ":12345"
+	for name, value := range headers {
+		req.Header.Set(name, value)
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(okBody))
+	})
+	return rec
+}
+
 func parseConst(cfg GuardConfig) func() GuardConfig {
 	return func() GuardConfig { return cfg }
 }
@@ -154,41 +170,36 @@ func TestRateLimitReturns429(t *testing.T) {
 
 func TestHealthEndpointsExcludedByDefault(t *testing.T) {
 	h := Load(parseConst(baseEnabled(func(c *GuardConfig) {
-		c.RateLimit = 1
-		c.RateLimitWindow = 60
-		c.Blacklist = []string{"203.0.113.0/24"}
+		c.InspectPayloads = true
 	})))
-	ip := "203.0.113.7" // blacklisted; exclusion short-circuits before the engine
+	attack := "?q=<script>alert(1)</script>"
 
+	// Excluded paths skip detection (exclusion scoping inside the engine).
 	for _, path := range []string{"/_health", "/_health/ready", "/_ready", "/docs", "/static/app.js"} {
-		if rec := serve(t, h, http.MethodGet, path, ip, ""); rec.Code != http.StatusOK {
-			t.Fatalf("%s must be excluded by default even for a blacklisted IP, got %d", path, rec.Code)
+		if rec := serve(t, h, http.MethodGet, path+attack, "203.0.113.7", ""); rec.Code != http.StatusOK {
+			t.Fatalf("%s must be excluded from detection by default, got %d", path, rec.Code)
 		}
 	}
-	if rec := serve(t, h, http.MethodGet, "/healthcheck", ip, ""); rec.Code == http.StatusOK {
+	if rec := serve(t, h, http.MethodGet, "/healthcheck"+attack, "203.0.113.7", ""); rec.Code == http.StatusOK {
 		t.Fatal("/healthcheck is not a default exclusion and must still be guarded")
 	}
 }
 
 func TestOperatorExclusionsMergeWithDefaults(t *testing.T) {
 	h := Load(parseConst(baseEnabled(func(c *GuardConfig) {
-		c.RateLimit = 1
+		c.InspectPayloads = true
 		c.ExcludePaths = []string{"/reports"}
 	})))
 	ip := "203.0.113.9"
-	if rec := serve(t, h, http.MethodGet, "/reports/daily", ip, ""); rec.Code != http.StatusOK {
-		t.Fatalf("operator exclusion must skip checks, got %d", rec.Code)
+	attack := "?q=<script>alert(1)</script>"
+	if rec := serve(t, h, http.MethodGet, "/reports/daily"+attack, ip, ""); rec.Code != http.StatusOK {
+		t.Fatalf("operator exclusion must skip detection, got %d", rec.Code)
 	}
-	if rec := serve(t, h, http.MethodGet, "/_health", ip, ""); rec.Code != http.StatusOK {
+	if rec := serve(t, h, http.MethodGet, "/_health"+attack, ip, ""); rec.Code != http.StatusOK {
 		t.Fatalf("defaults must survive operator exclusions, got %d", rec.Code)
 	}
-	// Rate limits key per client and endpoint: the first /articles request
-	// passes, the second trips the limit of 1.
-	if rec := serve(t, h, http.MethodGet, "/articles", ip, ""); rec.Code != http.StatusOK {
-		t.Fatalf("non-excluded path first request must pass, got %d", rec.Code)
-	}
-	if rec := serve(t, h, http.MethodGet, "/articles", ip, ""); rec.Code != http.StatusTooManyRequests {
-		t.Fatalf("non-excluded path must stay rate limited, got %d", rec.Code)
+	if rec := serve(t, h, http.MethodGet, "/articles"+attack, ip, ""); rec.Code != http.StatusBadRequest {
+		t.Fatalf("non-excluded path must stay inspected, got %d", rec.Code)
 	}
 }
 

@@ -91,8 +91,13 @@ type GuardConfig struct {
 	ExcludePaths []string
 	// TrustedProxies lists proxy IPs/CIDRs whose X-Forwarded-For is trusted
 	// when resolving the real client IP. Empty means forwarded headers are
-	// ignored and the direct peer is the client.
+	// ignored and the direct peer is the client. The engine resolves the
+	// client (the reference extract_client_ip), not this plugin.
 	TrustedProxies []string
+	// TrustedProxyDepth is the engine's trusted_proxy_depth: how many
+	// forwarded hops from the right belong to your own proxies. 0 keeps the
+	// engine default (1).
+	TrustedProxyDepth int
 	// BlockCloudProviders blocks datacenter ranges ("AWS", "GCP", "Azure").
 	BlockCloudProviders []string
 
@@ -105,6 +110,19 @@ type GuardConfig struct {
 	// initialization retries in the background, and the guard goes live when
 	// Redis returns.
 	RedisFailOpen bool
+
+	// EngineConfigJSON is a JSON object whose keys are guardcore.SecurityConfig
+	// field names (see the README "Full engine config" section). It is decoded
+	// over the config the fields above produce, so it reaches every engine
+	// setting without a dedicated variable. Unknown keys and non-serializable
+	// fields are an error, never silently dropped.
+	EngineConfigJSON string
+	// Configure is the Go-level hook for a plugin built from a fork: it gets
+	// the fully built engine config last (after the fields above and
+	// EngineConfigJSON), and can set the func and interface fields JSON
+	// cannot carry (CustomResponseModifier, AgentHandler, GeoIPHandler,
+	// CustomRequestCheck, ...).
+	Configure func(*guardcore.SecurityConfig)
 }
 
 // ParseGuardConfig reads every PREST_GUARD_* variable through lookup. Each
@@ -229,6 +247,32 @@ func ParseGuardConfig(lookup func(string) (string, bool)) GuardConfig {
 	}
 	if raw, ok := lookup(envPrefix + "BLOCK_CLOUD_PROVIDERS"); ok {
 		cfg.BlockCloudProviders = splitList(raw)
+	}
+
+	if raw, ok := lookup(envPrefix + "TRUSTED_PROXY_DEPTH"); ok {
+		if parsed, err := parseInt(raw); err != nil {
+			fail("PREST_GUARD_TRUSTED_PROXY_DEPTH: %q is not a valid integer", raw)
+		} else if parsed <= 0 {
+			fail("PREST_GUARD_TRUSTED_PROXY_DEPTH: %d is not positive", parsed)
+		} else {
+			cfg.TrustedProxyDepth = parsed
+		}
+	}
+
+	inline, _ := lookup(envPrefix + "ENGINE_CONFIG")
+	file, _ := lookup(envPrefix + "ENGINE_CONFIG_FILE")
+	inline, file = strings.TrimSpace(inline), strings.TrimSpace(file)
+	switch {
+	case inline != "" && file != "":
+		fail("PREST_GUARD_ENGINE_CONFIG and PREST_GUARD_ENGINE_CONFIG_FILE are both set; use one")
+	case inline != "":
+		cfg.EngineConfigJSON = inline
+	case file != "":
+		if data, err := os.ReadFile(file); err != nil {
+			fail("PREST_GUARD_ENGINE_CONFIG_FILE: %v", err)
+		} else {
+			cfg.EngineConfigJSON = string(data)
+		}
 	}
 
 	if raw, ok := lookup(envPrefix + "REDIS_URL"); ok {

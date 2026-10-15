@@ -1,8 +1,11 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,12 +45,6 @@ func Load(parse func() GuardConfig) negroni.Handler {
 		return passThroughHandler()
 	}
 
-	trusted, err := newTrustedProxySet(cfg.TrustedProxies)
-	if err != nil {
-		slog.Error("prest-guard: invalid config, failing closed", "err", err)
-		return misconfiguredHandler()
-	}
-
 	engineCfg, err := buildEngineConfig(cfg)
 	if err != nil {
 		slog.Error("prest-guard: invalid config, failing closed", "err", err)
@@ -56,13 +53,13 @@ func Load(parse func() GuardConfig) negroni.Handler {
 
 	exclusions := newPathExclusions(mergeExclusions(cfg.ExcludePaths))
 
-	handler, err := engineFactoryFor(engineCfg, cfg, exclusions, trusted)()
+	handler, err := engineFactoryFor(engineCfg, cfg)()
 	if err == nil {
 		return handler
 	}
 	slog.Error("prest-guard: engine initialization failed; answering 503 until it succeeds", "err", err)
 	return deferredHandler(
-		engineFactoryFor(engineCfg, cfg, exclusions, trusted),
+		engineFactoryFor(engineCfg, cfg),
 		exclusions,
 		time.Second,
 	)
@@ -87,7 +84,8 @@ func buildEngineConfig(cfg GuardConfig) (*guardcore.SecurityConfig, error) {
 			cfg.AutoBanDuration = defaultAutoBanDuration
 		}
 	}
-	return guardcore.NewSecurityConfig(func(c *guardcore.SecurityConfig) {
+	var overlayErr error
+	engineCfg, err := guardcore.NewSecurityConfig(func(c *guardcore.SecurityConfig) {
 		c.OnBlock = onBlockLogger()
 		c.PassiveMode = cfg.Passive
 
@@ -132,10 +130,13 @@ func buildEngineConfig(cfg GuardConfig) (*guardcore.SecurityConfig, error) {
 			c.EnabledDetectionCategories = cfg.InspectCategories
 		}
 		if len(cfg.TrustedProxies) > 0 {
-			// The engine arms spoof detection for untrusted peers carrying
-			// X-Forwarded-For; the chain walk itself stays in this adapter
-			// (the engine's own comment pins that split).
+			// The engine resolves the client identity from X-Forwarded-For
+			// for trusted peers and flags spoofed headers from untrusted
+			// ones (extract_client_ip); the adapter passes RemoteAddr as is.
 			c.TrustedProxies = cfg.TrustedProxies
+		}
+		if cfg.TrustedProxyDepth > 0 {
+			c.TrustedProxyDepth = cfg.TrustedProxyDepth
 		}
 
 		// Pin the Redis fields before the conditional: the engine defaults
@@ -150,7 +151,27 @@ func buildEngineConfig(cfg GuardConfig) (*guardcore.SecurityConfig, error) {
 			c.RedisURL = cfg.RedisURL
 			c.RedisFailOpen = cfg.RedisFailOpen
 		}
+
+		// The full engine config: JSON over the subset above, then the Go
+		// hook. The default exclusions are merged back afterwards so an
+		// ExcludePaths list in the JSON can only add to them.
+		if cfg.EngineConfigJSON != "" {
+			decoder := json.NewDecoder(strings.NewReader(cfg.EngineConfigJSON))
+			decoder.DisallowUnknownFields()
+			if err := decoder.Decode(c); err != nil {
+				overlayErr = fmt.Errorf("engine config JSON: %w", err)
+				return
+			}
+			c.ExcludePaths = mergeExclusions(c.ExcludePaths)
+		}
+		if cfg.Configure != nil {
+			cfg.Configure(c)
+		}
 	})
+	if overlayErr != nil {
+		return nil, overlayErr
+	}
+	return engineCfg, err
 }
 
 // engineFactory builds and fully initializes one engine plus its request
@@ -158,7 +179,7 @@ func buildEngineConfig(cfg GuardConfig) (*guardcore.SecurityConfig, error) {
 // the error.
 type engineFactory func() (negroni.Handler, error)
 
-func engineFactoryFor(engineCfg *guardcore.SecurityConfig, cfg GuardConfig, exclusions *pathExclusions, trusted *trustedProxySet) engineFactory {
+func engineFactoryFor(engineCfg *guardcore.SecurityConfig, cfg GuardConfig) engineFactory {
 	return func() (negroni.Handler, error) {
 		engine, err := guardcore.NewEngine(engineCfg)
 		if err != nil {
@@ -168,7 +189,7 @@ func engineFactoryFor(engineCfg *guardcore.SecurityConfig, cfg GuardConfig, excl
 			_ = engine.Close()
 			return nil, err
 		}
-		handler, err := newGuardHandler(engine, cfg, exclusions, trusted)
+		handler, err := newGuardHandler(engine, cfg)
 		if err != nil {
 			_ = engine.Close()
 			return nil, err
@@ -177,11 +198,11 @@ func engineFactoryFor(engineCfg *guardcore.SecurityConfig, cfg GuardConfig, excl
 	}
 }
 
-// newGuardHandler composes the live request path: exclusion short-circuit,
-// trusted-proxy resolution, then the engine (rate limits, IP policy, cloud
-// providers, and, when inspect_payloads is on, payload detection including
-// the engine's native body scan).
-func newGuardHandler(engine *guardcore.Engine, cfg GuardConfig, exclusions *pathExclusions, trusted *trustedProxySet) (negroni.Handler, error) {
+// newGuardHandler wraps the engine through the nethttp adapter: exclusion
+// scoping, client identity resolution (trusted proxies), rate limits, IP
+// policy, cloud providers and, when inspect_payloads is on, payload
+// detection all run inside the engine exactly as for every other adapter.
+func newGuardHandler(engine *guardcore.Engine, cfg GuardConfig) (negroni.Handler, error) {
 	wrap, err := nethttpguard.New(engine,
 		nethttpguard.WithMaxBodyBytes(cfg.MaxBodyBytes),
 		nethttpguard.WithLogger(bridgeLogger()),
@@ -190,20 +211,14 @@ func newGuardHandler(engine *guardcore.Engine, cfg GuardConfig, exclusions *path
 		return nil, err
 	}
 	return negroni.HandlerFunc(func(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
-		// exclude_paths promises "skips guard checks"; the engine still runs
-		// some checks on excluded paths, so this short-circuits first.
-		if exclusions.matches(r.URL.Path) {
-			next(w, r)
-			return
-		}
-		applyTrustedProxy(r, trusted)
 		wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			next(w, r)
 		})).ServeHTTP(w, r)
 	}), nil
 }
 
-// deferredHandler answers 503 (excluded paths still pass) while a background
+// deferredHandler answers 503 (excluded paths still pass, matched by the
+// small pre-engine matcher because no engine exists yet) while a background
 // goroutine retries the factory with capped exponential backoff; the first
 // success swaps the live guard in, so a startup outage recovers instead of
 // latching.

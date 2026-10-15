@@ -14,8 +14,8 @@ github.com/redis/go-redis/v9 v9.23.0 h1:/TTVdJa8BRNsybwwGGnmiYktHNlUXtbOQxlWpHBP
 github.com/redis/go-redis/v9 v9.23.0/go.mod h1:EWP2UUk+XDaI1s5nQB5mablZN6vccXlmBQTyfnF87D0=
 github.com/rennf93/guard-core-go/v4 v4.3.2 h1:UpEUaSw1MNIoPcMbikG2hPZr+rhqp8vtCDasNh0m5DQ=
 github.com/rennf93/guard-core-go/v4 v4.3.2/go.mod h1:zbSvFuYHn8Oo6bMwJ7jJ3iR8CEHBIYUvf1ALd1qMAvU=
-github.com/rennf93/nethttp-guard v1.3.0 h1:XdsT31Cg2lrqy/0kiXievANz/KaZM1LdXttK6plfC38=
-github.com/rennf93/nethttp-guard v1.3.0/go.mod h1:504XNp7GO3F/ZZ1Keiy9j7SdfYfWCHHqlGpqrdQM76A=
+github.com/rennf93/nethttp-guard v1.4.0 h1:7CArpfVqAbfk0I5HYVr1Vvcbb2P9D8RiPbv3wrgiBDE=
+github.com/rennf93/nethttp-guard v1.4.0/go.mod h1:DP766KRBdBQXFJ44j08drxWLjV9WvO1vA4gXMJqTu+k=
 github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWDWE=
 github.com/stretchr/testify v1.12.1/go.mod h1:MDEgiDPPsNp5cuIrHPPCyornHKgEVbtFUmoNlxoYthg=
 github.com/urfave/negroni/v3 v3.1.1 h1:6MS4nG9Jk/UuCACaUlNXCbiKa0ywF9LXz5dGu09v8hw=
