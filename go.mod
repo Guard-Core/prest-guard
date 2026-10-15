@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/rennf93/guard-core-go/v4 v4.3.2
-	github.com/rennf93/nethttp-guard v1.3.0
+	github.com/rennf93/nethttp-guard v1.4.0
 	github.com/urfave/negroni/v3 v3.1.1
 )
 

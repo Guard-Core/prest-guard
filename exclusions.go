@@ -1,8 +1,13 @@
 package main
 
-import "strings"
+import (
+	"path"
+	"strings"
+)
 
-// pathExclusions holds normalized exclude_paths entries.
+// pathExclusions holds normalized exclude_paths entries. It is only the
+// pre-engine matcher of deferredHandler (the 503 window before an engine
+// exists); once the engine is up, exclusion scoping is the engine's own.
 type pathExclusions struct {
 	entries []string
 }
@@ -24,9 +29,11 @@ func newPathExclusions(entries []string) *pathExclusions {
 // matches reports whether path falls inside one of the exclusion subtrees,
 // using the same subtree-or-equal semantics as the engine's exclude path
 // matcher: an entry "/health" covers "/health" and anything under "/health/".
-func (p *pathExclusions) matches(path string) bool {
+func (p *pathExclusions) matches(urlPath string) bool {
+	// Clean first: "/_health/../articles" must not ride an excluded prefix.
+	urlPath = path.Clean("/" + urlPath)
 	for _, entry := range p.entries {
-		if entry == "/" || path == entry || strings.HasPrefix(path, entry+"/") {
+		if entry == "/" || urlPath == entry || strings.HasPrefix(urlPath, entry+"/") {
 			return true
 		}
 	}

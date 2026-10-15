@@ -187,24 +187,56 @@ generic JSON body); with it disabled they only log a warning.
 | `PREST_GUARD_BLACKLIST` | empty | Blocked IPs/CIDRs (403) |
 | `PREST_GUARD_WHITELIST` | empty | Allowed IPs/CIDRs; when set, everyone else is denied |
 | `PREST_GUARD_EXEMPT_IPS` | empty | IPs/CIDRs that skip checks (still subject to active bans) |
-| `PREST_GUARD_EXCLUDE_PATHS` | empty | Extra paths whose subtree skips all guard checks |
+| `PREST_GUARD_EXCLUDE_PATHS` | empty | Extra paths whose subtree the engine scopes as excluded (detection and policy checks skip; IP bans, IP policy and rate limits still run, see below) |
 | `PREST_GUARD_TRUSTED_PROXIES` | empty | Proxy IPs/CIDRs whose `X-Forwarded-For` is trusted |
+| `PREST_GUARD_TRUSTED_PROXY_DEPTH` | engine default (`1`) | How many forwarded hops from the right belong to your own proxies |
 | `PREST_GUARD_BLOCK_CLOUD_PROVIDERS` | empty | Block datacenter ranges (`AWS,GCP,Azure`) |
 | `PREST_GUARD_MAX_BODY_BYTES` | `8192` | Body prefix the inspection layer reads |
 | `PREST_GUARD_REDIS_URL` | empty | Share rate limit and ban state across instances |
 | `PREST_GUARD_REDIS_PREFIX` | `prest_guard` | Key namespace in Redis |
 | `PREST_GUARD_REDIS_FAIL_OPEN` | `true` | Keep serving from per-instance memory when Redis is down |
+| `PREST_GUARD_ENGINE_CONFIG` | empty | Inline JSON object over the full engine config (see below) |
+| `PREST_GUARD_ENGINE_CONFIG_FILE` | empty | Path to a JSON file with the same content; set only one of the two |
+
+### Full engine config
+
+The variables above are a subset of the engine's `SecurityConfig`. Everything else (excluded detection headers, params and body fields, `Detection` tuning, `FailSecure`, endpoint rate limits, `EnforceHTTPS`, security headers, CORS, custom error responses, global behavior rules, blocked user agents, country lists, dynamic rules, emergency mode, agent settings, and the rest) is reachable through `PREST_GUARD_ENGINE_CONFIG` or `PREST_GUARD_ENGINE_CONFIG_FILE`: a JSON object whose keys are `guardcore.SecurityConfig` field names. It is decoded over the config the `PREST_GUARD_*` variables produce, so a key named in the JSON wins over the matching variable and the keys it does not name keep their values. Nested structs and maps merge into the engine defaults, slices and scalars replace them, durations are integer nanoseconds, and `ExcludePaths` can only add to the built-in defaults. Unknown keys, malformed JSON, func and interface fields, and values the engine rejects are loud config errors: an enabled guard answers 500 instead of running with a config you did not ask for.
+
+```bash
+export PREST_GUARD_ENGINE_CONFIG='{"BlockedUserAgents":["sqlmap"],"CustomErrorResponses":{"403":"blocked"},"ExcludedDetectionParams":{"_where":true}}'
+```
+
+Fields JSON cannot carry (`CustomResponseModifier`, `AgentHandler`, `GeoIPHandler`, `CustomRequestCheck`, `OnError`) are set from Go: a plugin built from a fork wraps `Load` with its own `GuardConfig.Configure`, which receives the fully built engine config last.
+
+```go
+func GuardMiddlewareLoad() negroni.Handler {
+	return Load(func() GuardConfig {
+		cfg := ParseGuardConfigFromEnv()
+		cfg.Configure = func(c *guardcore.SecurityConfig) {
+			c.CustomRequestCheck = myCheck
+		}
+		return cfg
+	})
+}
+```
+
+`CustomResponseModifier` takes effect once the pinned `nethttp-guard` release applies it (the nethttp adapter wires the engine's response modifier from the release after v1.4.0).
 
 ### Defaults that prevent outages
 
 Three defaults exist specifically because most pREST deployments sit behind
 a load balancer:
 
-- `/_health`, `/_ready`, and the docs/static paths are excluded from every
-  guard check, always. Health probes share the proxy's identity with all
-  user traffic; rate limiting or banning them takes pods out of rotation.
-  Operator entries in `EXCLUDE_PATHS` are merged with these, not replacing
-  them.
+- `/_health`, `/_ready`, and the docs/static paths are always excluded,
+  and operator entries in `EXCLUDE_PATHS` are merged with them, not
+  replacing them. Exclusion is the engine's own scoping, the same as in the
+  other adapters and the reference: detection and the route and request
+  policy checks skip these paths, and their responses still carry the
+  security headers and count in the metrics. IP bans, the IP blacklist and
+  whitelist, and rate limits are still enforced on them. Health probes share
+  the proxy's identity with all user traffic, so list the probe source in
+  `EXEMPT_IPS` (and set `TRUSTED_PROXIES`) to keep a rate limit from taking
+  pods out of rotation.
 - Auto-banning is opt-in. With an empty `TRUSTED_PROXIES`, every client
   shares the load balancer's IP, so a handful of violations would ban all
   users at once. Starting the guard without `TRUSTED_PROXIES` logs a loud
@@ -214,13 +246,7 @@ a load balancer:
 
 ### Trusted proxies
 
-When the direct peer is a trusted proxy, the client IP is resolved by
-walking `X-Forwarded-For` from the right and taking the rightmost hop that
-is not itself trusted (the leftmost entry when every hop is trusted, every
-header line joined). Forwarded headers from untrusted peers are ignored
-completely, and a malformed hop voids the whole chain. This mirrors the
-reference engine's adapter-side contract; the engine separately flags
-untrusted peers that send `X-Forwarded-For` as spoof attempts.
+The engine resolves the client identity (the reference `extract_client_ip`), the plugin only hands it the connection's `RemoteAddr`. When the direct peer is in `TRUSTED_PROXIES`, the client is the hop `TRUSTED_PROXY_DEPTH` places from the right of `X-Forwarded-For` (default 1, the entry your proxy appended; set it to the number of proxies in front of pREST). A depth that over-counts the hops falls back to the right-to-left walk past trusted entries, and a chain shorter than the depth keeps the peer. Forwarded headers from untrusted peers are ignored, and the engine flags them as spoof attempts. Earlier versions walked the chain themselves and took the rightmost untrusted hop; with several trusted proxies in a row, set the depth instead.
 
 ### Redis modes
 
@@ -254,21 +280,12 @@ inspection on, full middleware path):
 
 | Body size | Pass path (prose JSON) | Reject path (threat) |
 |---|---|---|
-| 8 KiB (default) | ~59 ms | ~59 ms |
-| 16 KiB | ~140 ms | ~139 ms |
-| 64 KiB | ~1.16 s | ~1.25 s |
-| 256 KiB | ~13 s | ~16 s |
+| 8 KiB (default) | ~28 ms | ~20 ms |
+| 16 KiB | ~47 ms | ~39 ms |
+| 64 KiB | ~0.22 s | ~0.20 s |
+| 256 KiB | ~1.2 s | ~1.2 s |
 
-Rejection is not cheaper than passing; cost is body-size driven. Keep the
-default unless you have measured acceptance for the cost at your bound:
-eight concurrent clients posting 64 KiB bodies will saturate one core.
-
-The numbers above are large because guard-core-go does not yet port the
-reference engine's large-value truncation (Python guard-core caps
-full-pattern scans at 256 KiB and rebuilds a bounded scan budget around
-detected attack regions). Until that lands engine-side, treat
-`MAX_BODY_BYTES` as a CPU budget, not a feature dial. Rate limits and IP
-policy alone do not read bodies and cost about 4 microseconds per request.
+Cost still grows with body size, so keep the default unless you have measured acceptance for the cost at your bound. The engine caps what it scans (its large-value truncation, `Detection.MaxBodyInspectBytes` and the scan budget), which is why the 1 MiB bound costs about the same as 256 KiB. Treat `MAX_BODY_BYTES` as a CPU budget, not a feature dial. Rate limits and IP policy alone do not read bodies and cost about 9 microseconds per request.
 
 ## Verdict codes
 

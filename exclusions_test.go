@@ -36,3 +36,13 @@ func TestPathExclusionsSubtreeSemantics(t *testing.T) {
 		t.Fatal("unrelated path must not match")
 	}
 }
+
+func TestPathExclusionsDoNotFollowDotDotOutOfASubtree(t *testing.T) {
+	ex := newPathExclusions([]string{"/_health"})
+	if ex.matches("/_health/../articles") {
+		t.Fatal("a dot-dot path leaving the subtree must not match")
+	}
+	if !ex.matches("/_health/./ready") {
+		t.Fatal("a cleaned path inside the subtree must match")
+	}
+}
