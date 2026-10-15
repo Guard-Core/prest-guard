@@ -368,3 +368,25 @@ func TestDeferredHandlerSwapsLiveGuardIn(t *testing.T) {
 	}
 	t.Fatal("deferred handler never swapped the live guard in")
 }
+
+func TestBuildEngineConfigMapsRateLimitAutoBan(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		autoBan, passive bool
+		want             bool
+	}{
+		{"auto ban on", true, false, true},
+		{"auto ban off", false, false, false},
+		{"passive never bans", true, true, false},
+	} {
+		cfg := baseEnabled(nil)
+		cfg.AutoBan, cfg.Passive = tc.autoBan, tc.passive
+		got, err := buildEngineConfig(cfg)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if got.EnableRateLimitAutoBan != tc.want {
+			t.Fatalf("%s: EnableRateLimitAutoBan = %v, want %v", tc.name, got.EnableRateLimitAutoBan, tc.want)
+		}
+	}
+}

@@ -110,12 +110,11 @@ func buildEngineConfig(cfg GuardConfig) (*guardcore.SecurityConfig, error) {
 		// accumulates every client's violations, so auto-banning by default
 		// would let a handful of flagged requests lock out all users behind
 		// a load balancer.
-		// NOTE: the engine exposes EnableRateLimitAutoBan, but its
-		// route-aware CheckRateLimit path (the one every adapter uses)
-		// never feeds the autoban counter, so the knob is inert through
-		// any middleware. It stays unmapped here until the engine wires
-		// it; advertising it would be a silent no-op.
+		// Rate-limit violations feed the same auto-ban counter as payload
+		// violations once the engine wires EnableRateLimitAutoBan through
+		// its route-aware rate limit check (guard-core-go after v4.3.2).
 		c.EnableIPBanning = cfg.AutoBan && !cfg.Passive
+		c.EnableRateLimitAutoBan = cfg.AutoBan && !cfg.Passive
 		if cfg.AutoBan {
 			c.AutoBanThreshold = cfg.AutoBanThreshold
 			c.AutoBanDuration = cfg.AutoBanDuration
