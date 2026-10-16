@@ -3,6 +3,31 @@
 All notable changes to this project are documented here. The format follows
 Keep a Changelog; versions follow SemVer.
 
+v1.1.0 (2026-10-16)
+-------------------
+
+The full engine config, engine-side exclusions and client identity, and the guard-core-go v4.4.0 floor
+------------------------------------------------------------------------------------------------------
+
+### Added
+
+- **The plugin accepts the full engine config** (#17): `PREST_GUARD_ENGINE_CONFIG` (inline JSON) or `PREST_GUARD_ENGINE_CONFIG_FILE` decode a strict JSON object of `guardcore.SecurityConfig` field names over the existing env subset (unknown keys, bad JSON, func fields and values the engine rejects fail closed with the generic 500). The new `GuardConfig.EngineConfigJSON` field carries it, and `GuardConfig.Configure` gives a plugin built from a fork the fully built config last, for the func and interface fields JSON cannot carry (`CustomResponseModifier`, `AgentHandler`, `GeoIPHandler`, `CustomRequestCheck`). `PREST_GUARD_TRUSTED_PROXY_DEPTH` and `GuardConfig.TrustedProxyDepth` map the engine's `trusted_proxy_depth` (0 keeps the engine default of 1). The README documents the surface.
+- **The containerized example app** (#8): a compose stack running prestd built from a pinned upstream commit with the prest-guard plugin compiled and mounted, in front of Postgres, published to GHCR.
+
+### Changed
+
+- **Raised the engine floor to `github.com/rennf93/guard-core-go/v4 v4.4.0`, the reference-alignment release.** The v4.4.0 engine adds the per-request scan time budget (`Detection.MaxScanSeconds`, `pattern_timeout`), honors `Detection.ThreatScoreThreshold`, canonicalizes client identity (IPv4-mapped addresses, brackets, zones), follows the reference IP list precedence, answers an unresolved client address with 403 under `FailSecure`, applies dynamic rule versions over the base config, fixes the filtered-value scan bypass (GHSA-w9j2-2m3v-5hcc) and scans the Cookie header one pair at a time. The `nethttp-guard` floor stays at v1.4.0 in this change and moves to the v1.5.0 release (which applies the `CustomResponseModifier`) in a follow-up once that tag is published.
+- **Exclusions and client identity run inside the engine** (#17): `proxy.go` and the path short-circuit in the handler are gone. Excluded paths still skip detection but, as in the reference, `ip_security` and `rate_limit` stay enforced on them, so a probe source that shares an identity with a rate limit should go in `PREST_GUARD_EXEMPT_IPS`. Client resolution follows the engine's `trusted_proxy_depth` (default 1) instead of the old rightmost-untrusted walk. The pre-engine matcher stays only for the 503 window before an engine exists, and it now cleans the path so `/_health/../articles` cannot ride an excluded prefix.
+- **Behavior to know before upgrading.** A request that reaches the engine with an empty remote address is now answered 403 `Client address could not be determined` under `FailSecure`. IPv4 blacklist, whitelist, exempt and emergency entries now also match clients that connect as `::ffff:a.b.c.d`, and an IPv4 CIDR no longer trusts a mapped peer as a proxy. A configured whitelist now decides alone (a route whitelist overrides the route blacklist and skips the global lists, a global whitelist overrides the global blacklist), so an entry that relied on the blacklist beating the whitelist must move. A dynamic rule version no longer stacks on the previous one. A request that spends `Detection.MaxScanSeconds` (default 10.0) of regex CPU time is blocked with a `pattern_timeout` threat, and a set `Detection.ThreatScoreThreshold` now changes verdicts. A passive-mode log match on the old penetration wording needs updating.
+
+### Fixed
+
+- **`PREST_GUARD_AUTO_BAN` maps to `EnableRateLimitAutoBan`** (#19): `buildEngineConfig` sets it together with `EnableIPBanning` (on when the variable is set, off in passive mode). The engine feeds rate-limit violations into the autoban counter from v4.4.0 (guard-core-go#100), so the knob now takes effect on this release's floor.
+- **A timing flake in `TestDeferredHandlerSwapsLiveGuardIn`**: the background engine retry could win the race against the first request (about 2 runs in 12 on master and on v4.4.0), so the test now holds the retry until the 503 is observed.
+- **Docs and CI**: the README is refreshed against the current engine (large-value truncation, benchmark table), the docs site deploys to GitHub Pages with `site_url` set, and the weekly lint runs on Go 1.26.x.
+
+___
+
 v1.0.1 (2026-10-09)
 -------------------
 
