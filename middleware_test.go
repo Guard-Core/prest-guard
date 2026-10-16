@@ -344,11 +344,13 @@ func TestRedisFailClosedAnswers503AndKeepsHealthAlive(t *testing.T) {
 func TestDeferredHandlerSwapsLiveGuardIn(t *testing.T) {
 	exclusions := newPathExclusions(mergeExclusions(nil))
 	attempts := 0
+	release := make(chan struct{}) // holds the retry until the 503 is observed
 	factory := func() (negroni.Handler, error) {
 		attempts++
 		if attempts == 1 {
 			return nil, fmt.Errorf("engine not ready")
 		}
+		<-release
 		return negroni.HandlerFunc(func(w http.ResponseWriter, _ *http.Request, next http.HandlerFunc) {
 			w.WriteHeader(http.StatusTeapot)
 		}), nil
@@ -358,6 +360,7 @@ func TestDeferredHandlerSwapsLiveGuardIn(t *testing.T) {
 	if rec := serve(t, h, http.MethodGet, "/articles", "203.0.113.20", ""); rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("before the retry succeeds the request must get 503, got %d", rec.Code)
 	}
+	close(release)
 	deadline := 100 // bounded wait for the background retry
 	for i := 0; i < deadline; i++ {
 		rec := serve(t, h, http.MethodGet, "/articles", "203.0.113.20", "")
